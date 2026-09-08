@@ -89,6 +89,20 @@ def main(src: str, dst: str):
         "high speed 8x",
     )
 
+    # 4. 重签名 APK 无法通过 TapTap 的“包名 + 原开发者签名”校验。
+    # 游戏自身 TapTapLoginManager.Start 的状态机已包含官方离线分支：
+    # TapTap登录状态 == false 时不初始化 TapSDK，并隐藏开始界面的登录按钮。
+    # 这里把条件分支改成无条件进入该离线分支，不伪造 TapTap 账号。
+    taptap_state_branch = 0x132EBF0
+    taptap_offline_path = 0x132ED3C
+    patch(
+        data,
+        taptap_state_branch,
+        bytes.fromhex("680a0034"),  # CBZ W8, offline_path
+        enc_branch(taptap_state_branch, taptap_offline_path, False),
+        "TapTap login disabled / built-in offline path",
+    )
+
     Path(dst).write_bytes(data)
     print(f"[done] {dst}")
 
