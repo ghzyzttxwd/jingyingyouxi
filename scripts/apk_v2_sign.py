@@ -111,7 +111,11 @@ def build_v2_value(content_digest: bytes, key, cert):
     signatures_seq = lp(sig_record)
 
     signer = lp(signed_data) + lp(signatures_seq) + lp(pub_der)
-    return lp(signer), signed_data, signature, cert_der, pub_der
+    # v2 value 本身是“length-prefixed signer sequence”，而 sequence 内的
+    # 每一个 signer 又是 length-prefixed。V0.1 漏掉了最外层这一层。
+    signers_seq = lp(signer)
+    v2_value = lp(signers_seq)
+    return v2_value, signed_data, signature, cert_der, pub_der
 
 
 def make_signing_block(v2_value: bytes):
@@ -194,9 +198,13 @@ def parse_and_verify(apk):
         off += 4
         return buf[off:off + n], off + n
 
-    signer, off = read_lp(v2, 0)
+    signers_seq, off = read_lp(v2, 0)
     if off != len(v2):
         raise ValueError('extra data after signer sequence')
+
+    signer, soff = read_lp(signers_seq, 0)
+    if soff != len(signers_seq):
+        raise ValueError('multiple/unparsed signers')
 
     signed_data, o = read_lp(signer, 0)
     sigs_seq, o = read_lp(signer, o)
